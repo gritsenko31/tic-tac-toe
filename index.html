@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tic Tac Toe — PvP and AI with Minimax, Stats, Animation, and Sounds</title>
+  <style>
+    :root {
+      --bg-color: #fdfdfd;
+      --board-bg: #f0f0f0;
+      --cell-border: #ccc;
+      --line-color: red;
+      --text-color: #222;
+      --primary-color: #007bff;
+      --button-bg: #007bff;
+      --button-text: white;
+      --button-hover: #0056b3;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      margin: 0;
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: 2em;
+      text-align: center;
+    }
+
+    #controls {
+      margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+      width: 90vmin;
+      height: 90vmin;
+      max-width: 400px;
+      max-height: 400px;
+      background: var(--board-bg);
+      position: relative;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+
+    .cell {
+      background-color: var(--board-bg);
+      border: 2px solid var(--cell-border);
+      font-size: 8vmin;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .cell:hover {
+      background-color: #d9eaff;
+    }
+
+    #message, #score {
+      margin-top: 15px;
+      font-size: 1.2em;
+      text-align: center;
+      user-select: text;
+    }
+
+    button {
+      padding: 10px 15px;
+      font-size: 1em;
+      cursor: pointer;
+      background: var(--button-bg);
+      color: var(--button-text);
+      border: none;
+      border-radius: 4px;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--button-hover);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    #win-line {
+      position: absolute;
+      width: 90vmin;
+      height: 90vmin;
+      max-width: 400px;
+      max-height: 400px;
+      pointer-events: none;
+      top: 0;
+      left: 0;
+    }
+
+    #line {
+      position: absolute;
+      height: 4px;
+      background: var(--line-color);
+      transform-origin: left center;
+      transform: scaleX(0);
+      transition: transform 0.3s ease-in-out;
+      border-radius: 2px;
+    }
+
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 1.5em;
+      }
+      .cell {
+        font-size: 15vw;
+      }
+      #controls {
+        flex-direction: column;
+        gap: 8px;
+      }
+    }
+
+    #side-selection {
+      display: none;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #side-selection.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Tic Tac Toe</h1>
+
+<div id="controls">
+  <button id="pvpBtn" type="button">PvP Mode</button>
+  <button id="botBtn" type="button">Play vs Bot</button>
+
+  <div id="side-selection" aria-label="Choose your side">
+    <span>Choose your side:</span>
+    <button id="chooseX" type="button">X</button>
+    <button id="chooseO" type="button">O</button>
+  </div>
+</div>
+
+<div id="board" aria-label="Tic Tac Toe board" role="grid" tabindex="0"></div>
+<div id="win-line"><div id="line"></div></div>
+
+<div id="message" aria-live="polite" role="status"></div>
+
+<div id="score" aria-label="Game score">
+  <p>X Wins: <span id="xScore">0</span> | O Wins: <span id="oScore">0</span> | Draws: <span id="draws">0</span></p>
+  <button id="resetScoresBtn" type="button">Reset Scores</button>
+</div>
+
+<button id="restartBtn" type="button">Restart Game</button>
+
+<!-- Sounds -->
+<audio id="moveSound" src="https://assets.mixkit.co/sfx/preview/mixkit-fast-double-click-on-mouse-275.wav" preload="auto"></audio>
+<audio id="winSound" src="https://assets.mixkit.co/sfx/preview/mixkit-video-game-win-2016.wav" preload="auto"></audio>
+<audio id="drawSound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-retro-game-over-213.wav" preload="auto"></audio>
+
+<script>
+  const board = document.getElementById('board');
+  const message = document.getElementById('message');
+  const xScoreEl = document.getElementById('xScore');
+  const oScoreEl = document.getElementById('oScore');
+  const drawsEl = document.getElementById('draws');
+  const line = document.getElementById('line');
+  const winLineContainer = document.getElementById('win-line');
+  const moveSound = document.getElementById('moveSound');
+  const winSound = document.getElementById('winSound');
+  const drawSound = document.getElementById('drawSound');
+
+  const pvpBtn = document.getElementById('pvpBtn');
+  const botBtn = document.getElementById('botBtn');
+  const sideSelection = document.getElementById('side-selection');
+  const chooseX = document.getElementById('chooseX');
+  const chooseO = document.getElementById('chooseO');
+  const resetScoresBtn = document.getElementById('resetScoresBtn');
+  const restartBtn = document.getElementById('restartBtn');
+
+  let cells = [];
+  let currentPlayer = 'X';
+  let gameOver = false;
+  let mode = 'pvp'; // 'pvp' or 'bot'
+  let playerSide = 'X'; // player side when vs bot
+  let botSide = 'O';    // bot side when vs bot
+
+  let scores = JSON.parse(localStorage.getItem('ticTacToeScores')) || { X: 0, O: 0, Draws: 0 };
+
+  // --- Setup event listeners ---
+  pvpBtn.addEventListener('click', () => {
+    mode = 'pvp';
+    sideSelection.classList.remove('active');
+    resetGame();
+  });
+
+  botBtn.addEventListener('click', () => {
+    mode = 'bot';
+    sideSelection.classList.add('active');
+    message.textContent = 'Choose your side to start playing vs bot.';
+    // Disable board and wait for side selection
+    disableBoard(true);
+  });
+
+  chooseX.addEventListener('click', () => {
+    playerSide = 'X';
+    botSide = 'O';
+    startBotGame();
+  });
+
+  chooseO.addEventListener('click', () => {
+    playerSide = 'O';
+    botSide = 'X';
+    startBotGame();
+  });
+
+  resetScoresBtn.addEventListener('click', () => {
+    if (confirm('Reset all scores?')) {
+      scores = { X: 0, O: 0, Draws: 0 };
+      updateScores();
+    }
+  });
+
+  restartBtn.addEventListener('click', () => {
+    resetGame();
+  });
+
+  // --- Functions ---
+
+  function createBoard() {
+    board.innerHTML = '';
+    cells = [];
+    gameOver = false;
+    currentPlayer = 'X';
+    message.textContent = mode === 'bot' ? 'Choose your side to start.' : "Player X's turn";
+    line.style.transform = 'scaleX(0)';
+
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement('div');
+      cell.classList.add('cell');
+      cell.dataset.index = i;
+      cell.setAttribute('role', 'button');
+      cell.setAttribute('aria-label', `Cell ${i + 1}`);
+      cell.tabIndex = 0;
+      cell.addEventListener('click', handleClick);
+      cell.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick(e);
+        }
+      });
+      board.appendChild(cell);
+      cells.push(cell);
+    }
+
+    updateScores();
+  }
+
+  function handleClick(e) {
+    if (gameOver) return;
+
+    // If vs bot, ignore clicks if it's bot's turn or player hasn't chosen side yet
+    if (mode === 'bot') {
+      if (!playerSide || currentPlayer !== playerSide) return;
+    }
+
+    const cell = e.target;
+    if (cell.textContent !== '') return;
+
+    cell.textContent = currentPlayer;
+    moveSound.play();
+
+    if (checkWin()) {
+      message.textContent = `Player ${currentPlayer} wins!`;
+      winSound.play();
+      scores[currentPlayer]++;
+      updateScores();
+      gameOver = true;
+      return;
+    } else if (cells.every(c => c.textContent !== '')) {
+      message.textContent = "It's a draw!";
+      drawSound.play();
+      scores.Draws++;
+      updateScores();
+      gameOver = true;
+      return;
+    }
+
+    currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+    message.textContent = `Player ${currentPlayer}'s turn`;
+
+    if (mode === 'bot' && currentPlayer === botSide && !gameOver) {
+      disableBoard(true);
+      setTimeout(botMove, 300);
+    }
+  }
+
+  function botMove() {
+    let bestScore = -Infinity;
+    let bestMove;
+
+    for (let i = 0; i < cells.length; i++) {
+      if (cells[i].textContent === '') {
+        cells[i].textContent = botSide;
+        let score = minimax(cells, 0, false);
+        cells[i].textContent = '';
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = i;
+        }
+      }
+    }
+
+    if (bestMove !== undefined) {
+      cells[bestMove].textContent = botSide;
+      moveSound.play();
+
+      if (checkWin()) {
+        message.textContent = `Player ${botSide} wins!`;
+        winSound.play();
+        scores[botSide]++;
+        updateScores();
+        gameOver = true;
+      } else if (cells.every(c => c.textContent !== '')) {
+        message.textContent = "It's a draw!";
+        drawSound.play();
+        scores.Draws++;
+        updateScores();
+        gameOver = true;
+      } else {
+        currentPlayer = playerSide;
+        message.textContent = `Player ${playerSide}'s turn`;
+        disableBoard(false);
+      }
+    }
+  }
+
+  function minimax(boardCells, depth, isMaximizing) {
+    if (checkStaticWin(botSide, boardCells)) return 10 - depth;
+    if (checkStaticWin(playerSide, boardCells)) return depth - 10;
+    if (boardCells.every(c => c.textContent !== '')) return 0;
+
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      for (let i = 0; i < boardCells.length; i++) {
+        if (boardCells[i].textContent === '') {
+          boardCells[i].textContent = botSide;
+          let evalScore = minimax(boardCells, depth + 1, false);
+          boardCells[i].textContent = '';
+          maxEval = Math.max(maxEval, evalScore);
+        }
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (let i = 0; i < boardCells.length; i++) {
+        if (boardCells[i].textContent === '') {
+          boardCells[i].textContent = playerSide;
+          let evalScore = minimax(boardCells, depth + 1, true);
+          boardCells[i].textContent = '';
+          minEval = Math.min(minEval, evalScore);
+        }
+      }
+      return minEval;
+    }
+  }
+
+  function checkStaticWin(player, boardCells) {
+    const winComb = [
+      [0,1,2], [3,4,5], [6,7,8],
+      [0,3,6], [1,4,7], [2,5,8],
+      [0,4,8], [2,4,6]
+    ];
+    return winComb.some(([a, b, c]) => 
+      boardCells[a].textContent === player &&
+      boardCells[b].textContent === player &&
+      boardCells[c].textContent === player
+    );
+  }
+
+  function checkWin() {
+    const winCombinations = [
+      [0,1,2], [3,4,5], [6,7,8],
+      [0,3,6], [1,4,7], [2,5,8],
+      [0,4,8], [2,4,6]
+    ];
+
+    for (let comb of winCombinations) {
+      const [a, b, c] = comb;
+      if (
+        cells[a].textContent &&
+        cells[a].textContent === cells[b].textContent &&
+        cells[a].textContent === cells[c].textContent
+      ) {
+        drawWinLine(comb);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function drawWinLine([a, b, c]) {
+    const pos = [
+      {x: 0, y: 0}, {x: 1, y: 0}, {x: 2, y: 0},
+      {x: 0, y: 1}, {x: 1, y: 1}, {x: 2, y: 1},
+      {x: 0, y: 2}, {x: 1, y: 2}, {x: 2, y: 2}
+    ];
+
+    const cellSize = board.offsetWidth / 3;
+    const start = pos[a], end = pos[c];
+    const dx = (end.x - start.x) * cellSize;
+    const dy = (end.y - start.y) * cellSize;
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const length = Math.sqrt(dx*dx + dy*dy);
+
+    line.style.top = `${start.y * cellSize + cellSize / 2}px`;
+    line.style.left = `${start.x * cellSize + cellSize / 2}px`;
+    line.style.width = `${length}px`;
+    line.style.transform = `rotate(${angle}deg) scaleX(1)`;
+  }
+
+  function updateScores() {
+    xScoreEl.textContent = scores.X;
+    oScoreEl.textContent = scores.O;
+    drawsEl.textContent = scores.Draws;
+    localStorage.setItem('ticTacToeScores', JSON.stringify(scores));
+  }
+
+  function disableBoard(disable) {
+    cells.forEach(c => {
+      c.style.pointerEvents = disable ? 'none' : 'auto';
+      c.style.cursor = disable ? 'default' : 'pointer';
+    });
+  }
+
+  function resetGame() {
+    createBoard();
+    if (mode === 'bot') {
+      // If bot is X and goes first, do bot move immediately
+      if (botSide === 'X') {
+        currentPlayer = 'X';
+        message.textContent = `Player ${playerSide}'s turn`;
+        disableBoard(true);
+        setTimeout(botMove, 300);
+      } else {
+        currentPlayer = 'X';
+        message.textContent = `Player ${playerSide}'s turn`;
+        disableBoard(false);
+      }
+    } else {
+      currentPlayer = 'X';
+      message.textContent = "Player X's turn";
+      disableBoard(false);
+    }
+  }
+
+  function startBotGame() {
+    sideSelection.classList.remove('active');
+    resetGame();
+  }
+
+  // Initialize
+  createBoard();
+</script>
+
+</body>
+</html>
